@@ -1,0 +1,40 @@
+<?php
+/**
+ * @file
+ * ding_kultunaut_import.install
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function ding_kultunaut_import_schema() {
+  $schema['imported_events'] = array(
+    'fields' => array(
+      'relid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'ieid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('relid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function ding_kultunaut_install() {
+  variable_set('ding_kultunaut_import_url', 'http://www.kultunaut.dk/perl/export/kulturoeenxml?version=full');
+}
