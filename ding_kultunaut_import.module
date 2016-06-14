@@ -1,10 +1,9 @@
 <?php
 /**
  * @file
- * ding_kultunaut_import.module
+ * Handling events import from Kultunaut service.
  */
 
-const EVENT_CATEGORY_VOCABULARY = 3;
 const EVENT_CATEGORY_FORMAT = 'ding_wysiwyg';
 
 /**
@@ -30,7 +29,6 @@ function ding_kultunaut_import_menu() {
  * Implements hook_cron().
  */
 function ding_kultunaut_import_cron() {
-  $return = array();
   $data = file_get_contents(variable_get('ding_kultunaut_import_url'));
 
   $headers = implode("\r\n", $http_response_header);
@@ -42,48 +40,50 @@ function ding_kultunaut_import_cron() {
       array('%error' => $data),
       WATCHDOG_ERROR
     );
-    return $return;
   }
+  else {
+    $xml = simplexml_load_string($data);
 
-  $xml = simplexml_load_string($data);
-  if (empty($xml->arrlist->arr)) {
-    return $return;
-  }
+    if ($xml !== FALSE) {
+      $i = 0;
+      foreach ($xml->arrlist->arr as $item) {
+        $existing = db_select('imported_events', 'i')
+          ->fields('i', array('eid'))
+          ->condition('eid', (string) $item->eventid, '=')
+          ->execute()
+          ->fetchField();
 
-  $i = 0;
-  foreach ($xml->arrlist->arr as $item) {
-    $existing = db_select('imported_events', 'i')
-      ->fields('i', array('ieid'))
-      ->condition('ieid', (string) $item->eventid, '=')
-      ->execute()
-      ->fetchField();
+        if (!$existing) {
+          $node = new stdClass();
+          $node->type = 'ding_event';
+          $node->language = LANGUAGE_NONE;
+          $node->promote = 1;
+          $node->title = (string) $item->overskrift;
+          $image = _ding_kultunaut_import_fetch_image((string) $item->billede);
+          $image = (array) $image;
+          $node->field_ding_event_title_image[LANGUAGE_NONE][] = $image;
+          $node->field_ding_event_list_image[LANGUAGE_NONE][] = $image;
+          $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
+          $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
+          $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
+          $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_library((string) $item->sted);
+          node_save($node);
+          db_insert('imported_events')
+            ->fields(array(
+              'nid' => $node->nid,
+              'eid' => (string) $item->eventid,
+            ))
+            ->execute();
+          $i++;
+        }
+      }
 
-    if (!$existing) {
-      $node = new stdClass();
-      $node->type = 'ding_event';
-      $node->language = 'und';
-      $node->promote = 1;
-      $node->title = (string) $item->overskrift;
-      $image = _ding_kultunaut_import_fetch_image((string) $item->billede);
-      $image = (array) file_load($image->fid);
-      $node->field_ding_event_title_image[LANGUAGE_NONE][] = $image;
-      $node->field_ding_event_list_image[LANGUAGE_NONE][] = $image;
-      $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
-      $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
-      $node->field_ding_event_date[LANGUAGE_NONE][0] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
-      $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_library((string) $item->sted);
-      node_save($node);
-      db_insert('imported_events')
-        ->fields(array(
-          'nid' => $node->nid,
-          'ieid' => (string) $item->eventid,
-        ))
-        ->execute();
-      $i++;
+      watchdog('kultunaut', 'Was imported @count nodes.', array('@count' => $i));
+    }
+    else {
+      watchdog('kultunaut', 'Error while requesting XML feed.');
     }
   }
-
-  watchdog('kultunaut', 'Was imported @count nodes.', array('@count' => $i));
 }
 
 /**
@@ -128,20 +128,58 @@ function _ding_kultunaut_import_library($title) {
  *   Array of values to be saved in event date field.
  */
 function _ding_kultunaut_import_event_date($startdate, $enddate, $time) {
-  $time = str_replace('kl. ', '', $time);
-  if (drupal_strlen($time) == 2) {
-    $time = $time - 2 . ":00";
-  }
-  else {
-    $time = explode('.', $time);
-    $hour = $time[0] - 2;
-    $min = $time[1];
-    $time = $hour . ':' . $min;
+  $startdate = DateTime::createFromFormat('Y-m-d', $startdate);
+  $enddate = DateTime::createFromFormat('Y-m-d', $enddate);
+
+  $enddate->setTime('0', '00');
+
+  $tostrip = array(
+    'kl. ' => '',
+    'kl ' => '',
+  );
+
+  $time = strtr($time, $tostrip);
+
+  switch ($startdate) {
+    case (drupal_strlen($time) == 2):
+      $startdate->setTime($time, '00');
+      $enddate->setTime($time, '00');
+      break;
+
+    case (drupal_strlen($time) == 5):
+      // Dot (.) delimiter.
+      if (strpos($time, '.')) {
+        $time = str_replace('.', ':', $time);
+        $time = explode(':', $time);
+        $startdate->setTime($time[0], $time[1]);
+        $enddate->setTime($time[0], $time[1]);
+      }
+      // Minus (-) delimiter.
+      elseif (strpos($time, '-')) {
+        $period = explode('-', $time);
+        $start = $period[0];
+        $end = $period[1];
+        $startdate->setTime($start, '00');
+        $enddate->setTime($end, '00');
+      }
+      break;
+
+    default:
+      $startdate->setTime('0', '00');
+      $enddate->setTime('0', '00');
+      break;
   }
 
+  // Changing timezone for correct time saving into DB.
+  $startdate->setTimezone(new DateTimeZone("UTC"));
+  $enddate->setTimezone(new DateTimeZone("UTC"));
+
+  $startdate = $startdate->format('Y-m-d H:i');
+  $enddate = $enddate->format('Y-m-d H:i');
+
   $dates = array(
-    'value' => $startdate . ' ' . $time,
-    'value2' => $enddate . ' ' . $time,
+    'value' => $startdate,
+    'value2' => $enddate,
   );
 
   return $dates;
@@ -158,33 +196,19 @@ function _ding_kultunaut_import_event_date($startdate, $enddate, $time) {
  */
 function _ding_kultunaut_import_category($term_name) {
   $arr_terms = taxonomy_get_term_by_name($term_name);
+  $vocabulary = taxonomy_vocabulary_machine_name_load('event_category');
   if (!empty($arr_terms)) {
-    $arr_terms = array_values($arr_terms);
-    $tid = $arr_terms[0]->tid;
+    $tid = key($arr_terms);
   }
   else {
     $term = new stdClass();
     $term->name = $term_name;
-    $term->vid = EVENT_CATEGORY_VOCABULARY;
+    $term->vid = $vocabulary->vid;
     $term->format = EVENT_CATEGORY_FORMAT;
     taxonomy_term_save($term);
     $tid = $term->tid;
   }
   return $tid;
-}
-
-
-/**
- * Create path to image.
- *
- * @param string $url
- *   URL to image from XML.
- *
- * @return string
- *   Generated file URI.
- */
-function _ding_kultunaut_import_image_path($url) {
-  return file_default_scheme() . "://imported_events/" . md5($url) . ".jpg";
 }
 
 /**
@@ -197,16 +221,10 @@ function _ding_kultunaut_import_image_path($url) {
  *   Image file object.
  */
 function _ding_kultunaut_import_fetch_image($url) {
-
-  $image = _ding_kultunaut_import_image_path($url);
-
-  // Do not download the image again if it exists.
-  if (file_exists($image)) {
-    return $image;
-  }
+  $destination = file_default_scheme() . "://imported_events/" . md5($url) . ".jpg";
 
   // Get the folder for the final location of image.
-  $directory = dirname($image);
+  $directory = dirname($destination);
 
   // Build the destination folder tree if it doesn't already exist.
   if (!file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS)) {
@@ -221,19 +239,20 @@ function _ding_kultunaut_import_fetch_image($url) {
 
   // Download image.
   $result = drupal_http_request($url);
-  watchdog(
-    'kultunaut',
-    'Downloading image %image into %file',
-    array('%image' => $url, '%file' => $image),
-    WATCHDOG_DEBUG
-  );
 
   // Return false if HTTP request failed.
   if ($result->code != 200) {
+    watchdog(
+      'kultunaut',
+      "Can't download image %image into file",
+      array('%image' => $url),
+      WATCHDOG_DEBUG
+    );
     return FALSE;
   }
 
-  return file_save_data($result->data, $directory, FILE_EXISTS_REPLACE);
+  $file = file_save_data(file_get_contents($url), $destination, FILE_EXISTS_REPLACE);
+  return $file;
 }
 
 /**
