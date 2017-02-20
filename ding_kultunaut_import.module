@@ -67,6 +67,11 @@ function ding_kultunaut_import_cron() {
           $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
           $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
           $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_library((string) $item->sted);
+          if (module_exists('domain')) {
+            $domains = variable_get('ding_kultunaut_import_domains', array());
+            $node->domain_site = FALSE;
+            $node->domains = $domains;
+          }
           node_save($node);
           db_insert('imported_events')
             ->fields(array(
