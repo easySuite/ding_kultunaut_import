@@ -1,0 +1,50 @@
+<?php
+/**
+ * @file
+ * Module installing and uninstalling handlers.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function ding_kultunaut_import_schema() {
+  $schema['imported_events'] = array(
+    'fields' => array(
+      'relid' => array(
+        'type' => 'serial',
+        'description' => 'Relation identificator.',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'type' => 'int',
+        'description' => 'Created node identificator.',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'eid' => array(
+        'type' => 'int',
+        'description' => 'Event ID got from "eventid" field of XML feed.',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('relid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function ding_kultunaut_import_install() {
+  variable_set('ding_kultunaut_import_url', 'http://www.kultunaut.dk/perl/export/kulturoeenxml?version=full');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function ding_kultunaut_import_uninstall() {
+  variable_del('ding_kultunaut_import_url');
+}
