@@ -22,29 +22,7 @@ function ding_kultunaut_import_menu() {
     'file' => 'ding_kultunaut_import.admin.inc',
   );
 
-  // Add to hook menu
-  /* DEBUG: Clear imported */
-  $items['admin/config/ding_event/event_import/clear'] = array(
-    'access arguments' => array('administer site configuration'),
-    'page callback' => '_clear_imported',
-    'type' => MENU_LOCAL_TASK,
-  );
-
   return $items;
-}
-
-// Callback function.
-function _clear_imported() {
-  $query = db_select('imported_events', 'di')
-    ->fields('di', array('nid'))
-    ->execute()
-    ->fetchAll();
-
-  foreach ($query as $item) {
-    node_delete($item->nid);
-  }
-
-  echo "Deleted " . count($query) . " items";
 }
 
 /**
@@ -115,6 +93,10 @@ function ding_kultunaut_import_cron() {
 
 /**
  * Callback for preparing library field for imported node.
+ *
+ * @param string $item
+ *   String form <sted> field of feed. This string contain venue name where the
+ *   event will take place.
  */
 function _ding_kultunaut_import_assign_library($item) {
   // Preparing <sted> string.
@@ -128,6 +110,7 @@ function _ding_kultunaut_import_assign_library($item) {
     $match = strpos($string, drupal_strtolower($checked['searched_string']));
     if ($match !== FALSE) {
       $library_nid = $checked['library'];
+      break;
     }
   }
 
@@ -321,7 +304,8 @@ function theme_ding_kultunaut_import_mapping_table(&$variables) {
       foreach (element_children($form[$id]) as $child_id) {
         if ($child_id == 'values') {
           $row[] = drupal_render($form[$id][$child_id]['type']) . drupal_render($form[$id][$child_id]['list']);
-        } else {
+        }
+        else {
           $row[] = drupal_render($form[$id][$child_id]);
         }
       }

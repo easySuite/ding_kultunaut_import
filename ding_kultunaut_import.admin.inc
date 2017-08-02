@@ -49,6 +49,10 @@ function ding_kultunaut_import_settings_form($form, &$form_state, $deleted_id) {
     );
   }
 
+  $options = array(
+    '' => t('Select library'),
+  );
+
   // Library mapping.
   $query = db_select('node', 'n');
   $query->innerJoin('domain_access', 'da', 'n.nid = da.nid');
@@ -56,17 +60,8 @@ function ding_kultunaut_import_settings_form($form, &$form_state, $deleted_id) {
   $query->fields('n', array('nid', 'title'));
   $query->condition('n.type', 'ding_library', '=');
   $query->condition('n.status', 1);
-  $query->condition('d.machine_name', 'kulturoen_dk');
 
-  $libraries = $query->execute()->fetchAll();
-
-  $options = array(
-    '' => t('Select library'),
-  );
-
-  foreach ($libraries as $library) {
-    $options[$library->nid] = $library->title;
-  }
+  $options = $query->execute()->fetchAllKeyed();
 
   $form['ding_kultunaut_library_mapping'] = array(
     '#prefix' => '<div id="ding-kultunaut-import-mapping-wrapper">',
