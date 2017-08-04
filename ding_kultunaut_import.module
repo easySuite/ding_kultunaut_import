@@ -66,7 +66,7 @@ function ding_kultunaut_import_cron() {
           $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
           $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
           $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
-          $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_library((string) $item->sted);
+          $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
           if (module_exists('domain')) {
             $domains = variable_get('ding_kultunaut_import_domains', array());
             $node->domain_site = FALSE;
@@ -94,29 +94,51 @@ function ding_kultunaut_import_cron() {
 /**
  * Callback for preparing library field for imported node.
  *
- * @param string $title
- *   Title string from XML.
+ * @param string $item
+ *   String form <sted> field of feed. This string contain venue name where the
+ *   event will take place.
  */
-function _ding_kultunaut_import_library($title) {
+function _ding_kultunaut_import_assign_library($item) {
+  // Preparing <sted> string.
+  $string = drupal_strtolower($item);
+
+  // Fetching mapping of libraries.
+  $mapping = variable_get('ding_kultunaut_library_mapping', array());
+
+  // Processing mappings.
+  foreach ($mapping as $checked) {
+    $match = strpos($string, drupal_strtolower($checked['searched_string']));
+    if ($match !== FALSE) {
+      $library_nid = $checked['library'];
+      break;
+    }
+  }
+
+  // Getting "Other" library nid, if not exist - create this.
   $query = db_select('node', 'n')
     ->fields('n', array('nid'))
     ->condition('type', 'ding_library', '=')
-    ->condition('title', $title, '=')
+    ->condition('title', 'Other', '=')
     ->execute();
   $result = $query->fetchField();
 
   if (!$result) {
     $node = new stdClass();
     $node->type = 'ding_library';
-    $node->title = $title;
+    $node->title = 'Other';
     node_save($node);
-    $nid = $node->nid;
+    $other_library = $node->nid;
   }
   else {
-    $nid = $result;
+    $other_library = $result;
   }
 
-  return $nid;
+  if (empty($library_nid)) {
+    $library_nid = $other_library;
+  }
+
+  // Return matched library nid.
+  return $library_nid;
 }
 
 /**
@@ -267,4 +289,47 @@ function ding_kultunaut_import_node_delete($node) {
   db_delete('imported_events')
     ->condition('nid', $node->nid)
     ->execute();
+}
+
+/**
+ * Theme function for fields settings form.
+ */
+function theme_ding_kultunaut_import_mapping_table(&$variables) {
+  $rows = array();
+  $form = $variables['form'];
+  $header = $form['#header'];
+  foreach (element_children($form) as $id) {
+    if (is_numeric($id)) {
+      $row = array();
+      foreach (element_children($form[$id]) as $child_id) {
+        if ($child_id == 'values') {
+          $row[] = drupal_render($form[$id][$child_id]['type']) . drupal_render($form[$id][$child_id]['list']);
+        }
+        else {
+          $row[] = drupal_render($form[$id][$child_id]);
+        }
+      }
+      $rows[] = $row;
+    }
+  }
+
+  $output = theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+  ));
+
+  $output .= drupal_render_children($form);
+
+  return $output;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function ding_kultunaut_import_theme($existing, $type, $theme, $path) {
+  return array(
+    'ding_kultunaut_import_mapping_table' => array(
+      'render element' => 'form',
+    ),
+  );
 }
