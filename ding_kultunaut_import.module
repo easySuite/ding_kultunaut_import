@@ -104,7 +104,6 @@ function _ding_kultunaut_import_assign_library($item) {
 
   // Fetching mapping of libraries.
   $mapping = variable_get('ding_kultunaut_library_mapping', array());
-
   // Processing mappings.
   foreach ($mapping as $checked) {
     $match = strpos($string, drupal_strtolower($checked['searched_string']));
@@ -114,26 +113,26 @@ function _ding_kultunaut_import_assign_library($item) {
     }
   }
 
-  // Getting "Other" library nid, if not exist - create this.
-  $query = db_select('node', 'n')
-    ->fields('n', array('nid'))
-    ->condition('type', 'ding_library', '=')
-    ->condition('title', 'Other', '=')
-    ->execute();
-  $result = $query->fetchField();
-
-  if (!$result) {
-    $node = new stdClass();
-    $node->type = 'ding_library';
-    $node->title = 'Other';
-    node_save($node);
-    $other_library = $node->nid;
-  }
-  else {
-    $other_library = $result;
-  }
-
   if (empty($library_nid)) {
+    // Getting "Other" library nid, if not exist - create this.
+    $query = db_select('node', 'n')
+      ->fields('n', array('nid'))
+      ->condition('type', 'ding_library', '=')
+      ->condition('title', 'Other', '=')
+      ->execute();
+    $result = $query->fetchField();
+
+    if (!$result) {
+      $node = new stdClass();
+      $node->type = 'ding_library';
+      $node->title = 'Other';
+      node_save($node);
+      $other_library = $node->nid;
+    }
+    else {
+      $other_library = $result;
+    }
+
     $library_nid = $other_library;
   }
 
