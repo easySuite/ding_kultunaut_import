@@ -23,9 +23,10 @@ function ding_kultunaut_import_schema() {
         'not null' => TRUE,
       ),
       'eid' => array(
-        'type' => 'int',
+        'type' => 'varchar',
+        'length' => 255,
         'description' => 'Event ID got from "eventid" field of XML feed.',
-        'unsigned' => TRUE,
+        'default' => '',
         'not null' => TRUE,
       ),
     ),
@@ -47,4 +48,17 @@ function ding_kultunaut_import_install() {
  */
 function ding_kultunaut_import_uninstall() {
   variable_del('ding_kultunaut_import_url');
+}
+
+/**
+ * Expands the size of imported node identifier field.
+ */
+function ding_kultunaut_import_update_7001() {
+  db_change_field('imported_events', 'eid', 'eid', array(
+    'type' => 'varchar',
+    'length' => 255,
+    'description' => 'Event ID got from "eventid" field of XML feed.',
+    'default' => '',
+    'not null' => TRUE,
+  ));
 }
