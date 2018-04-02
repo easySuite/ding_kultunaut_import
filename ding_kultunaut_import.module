@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file
  * Handling events import from Kultunaut service.
@@ -64,21 +65,27 @@ function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
   $additional_events = [];
   foreach ($xml->arrlist->arr as $item) {
     $time = preg_split('/,|&/', $item->tid, -1, PREG_SPLIT_NO_EMPTY);
-    if (is_array($time)) {
-      $time = array_map(function ($value) {
-        return trim($value);
-      }, $time);
+    // One occurrence means there's only one time and no event copy is needed.
+    if (count($time) == 1) {
+      continue;
+    }
 
-      // Leave original event with the first time value.
-      $item->tid = reset($time);
+    $time = array_map(function ($value) {
+      return trim($value);
+    }, $time);
 
-      // Assign other time values to event copies.
-      while ($_t = next($time)) {
-        $new_event = clone $item;
-        $new_event->eventid = $item->eventid . uniqid('_', TRUE);
-        $new_event->tid = 'kl. ' . end($time);
-        $additional_events[] = $new_event;
-      }
+    // Original event receives first time occurrence.
+    $item->tid = reset($time);
+
+    // Assign other time values to event copies.
+    while ($next_time = next($time)) {
+      $new_event = clone $item;
+      // Make an unique id for an event clone so it doesn't mess up
+      // with original event. Event id and it's time are picked as the
+      // unique values for this particular event.
+      $new_event->eventid = $item->eventid . '-' . sha1($item->eventid . $next_time);
+      $new_event->tid = 'kl. ' . $next_time;
+      $additional_events[] = $new_event;
     }
   }
 
@@ -116,6 +123,7 @@ function ding_kultunaut_import_cron() {
     }
 
     $node = new stdClass();
+    $node->uid = 0;
     $node->type = 'ding_event';
     $node->language = LANGUAGE_NONE;
     $node->promote = 1;
@@ -319,6 +327,7 @@ function _ding_kultunaut_import_fetch_image($url) {
       array('%directory' => $directory),
       WATCHDOG_ERROR
     );
+
     return FALSE;
   }
 
@@ -326,17 +335,19 @@ function _ding_kultunaut_import_fetch_image($url) {
   $result = drupal_http_request($url);
 
   // Return false if HTTP request failed.
-  if ($result->code != 200) {
+  if ($result->code != 200 || empty($result->data)) {
     watchdog(
       'kultunaut',
-      "Can't download image %image into file",
+      "'Can't download image %image into file",
       array('%image' => $url),
       WATCHDOG_DEBUG
     );
+
     return FALSE;
   }
 
-  $file = file_save_data(file_get_contents($url), $destination, FILE_EXISTS_REPLACE);
+  $file = file_save_data($result->data, $destination, FILE_EXISTS_REPLACE);
+
   return $file;
 }
 
