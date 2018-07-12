@@ -1,9 +1,9 @@
 Ding Import events
 ==========
 
-Module will import events from Kultunaut by CRON.
+Module will import events from Kultunaut during cron action.
 
 ## Configuration:
-Enable module on @/admin/modules page.
-
-Go to @/admin/config/ding_event/event_import admin configuration form and add URI to XML file.
+1. Enable module at `admin/modules` page;
+1. Go to `admin/config/ding_event/event_import`;
+1. Set feed source URL and library mappings.

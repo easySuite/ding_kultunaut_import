@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file
  * Handling events import from Kultunaut service.
@@ -26,69 +27,135 @@ function ding_kultunaut_import_menu() {
 }
 
 /**
+ * Tries to load and read xml feed.
+ *
+ * @param string $url
+ *   URL endpoint.
+ *
+ * @return bool|\SimpleXMLElement
+ *   XML object or FALSE on failure.
+ */
+function ding_kultunaut_load_feed($url) {
+  $response = drupal_http_request($url);
+
+  if ((int) $response->code !== 200 || empty($response->data) || !$xml = simplexml_load_string($response->data)) {
+    watchdog(
+      'kultunaut',
+      'Failed parsing xml feed from url: <pre>!url</pre>Http code: <pre>@code</pre>Response: <pre>!response</pre>',
+      array(
+        '!url' => l($url, $url, array('external' => TRUE)),
+        '@code' => $response->code,
+        '!response' => htmlentities(var_export($response, TRUE)),
+      )
+    );
+
+    return FALSE;
+  }
+
+  return $xml;
+}
+
+/**
+ * Copies events with repeated event time as separate event entities.
+ *
+ * @param \SimpleXMLElement $xml
+ *   Parsed event feed xml object.
+ */
+function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
+  $additional_events = [];
+  foreach ($xml->arrlist->arr as $item) {
+    $time = preg_split('/,|&/', $item->tid, -1, PREG_SPLIT_NO_EMPTY);
+    // One occurrence means there's only one time and no event copy is needed.
+    if (count($time) == 1) {
+      continue;
+    }
+
+    $time = array_map(function ($value) {
+      return trim($value);
+    }, $time);
+
+    // Original event receives first time occurrence.
+    $item->tid = reset($time);
+
+    // Assign other time values to event copies.
+    while ($next_time = next($time)) {
+      $new_event = clone $item;
+      // Make an unique id for an event clone so it doesn't mess up
+      // with original event. Event id and it's time are picked as the
+      // unique values for this particular event.
+      $new_event->eventid = $item->eventid . '-' . sha1($item->eventid . $next_time);
+      $new_event->tid = 'kl. ' . $next_time;
+      $additional_events[] = $new_event;
+    }
+  }
+
+  // Since SimpleXML is unable to deep clone an element, append new elements
+  // to initial set by iterating element properties.
+  foreach ($additional_events as $additional_event) {
+    $arr_item = $xml->arrlist->addChild('arr');
+    foreach ((array) $additional_event as $property_name => $property_value) {
+      $arr_item->addChild($property_name, $property_value);
+    }
+  }
+}
+
+/**
  * Implements hook_cron().
  */
 function ding_kultunaut_import_cron() {
-  $data = file_get_contents(variable_get('ding_kultunaut_import_url'));
-
-  $headers = implode("\r\n", $http_response_header);
-
-  if (strpos($headers, 'xml') === FALSE) {
-    watchdog(
-      'kultunaut',
-      'Failed to fetch XML: %error',
-      array('%error' => $data),
-      WATCHDOG_ERROR
-    );
+  $xml = ding_kultunaut_load_feed(variable_get('ding_kultunaut_import_url'), '');
+  if (!$xml) {
+    return;
   }
-  else {
-    $xml = simplexml_load_string($data);
 
-    if ($xml !== FALSE) {
-      $i = 0;
-      foreach ($xml->arrlist->arr as $item) {
-        $existing = db_select('imported_events', 'i')
-          ->fields('i', array('eid'))
-          ->condition('eid', (string) $item->eventid, '=')
-          ->execute()
-          ->fetchField();
+  ding_kultunaut_import_expand_events($xml);
 
-        if (!$existing) {
-          $node = new stdClass();
-          $node->type = 'ding_event';
-          $node->language = LANGUAGE_NONE;
-          $node->promote = 1;
-          $node->title = (string) $item->overskrift;
-          $image = _ding_kultunaut_import_fetch_image((string) $item->billede);
-          $image = (array) $image;
-          $node->field_ding_event_title_image[LANGUAGE_NONE][] = $image;
-          $node->field_ding_event_list_image[LANGUAGE_NONE][] = $image;
-          $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
-          $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
-          $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
-          $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
-          if (module_exists('domain')) {
-            $domains = variable_get('ding_kultunaut_import_domains', array());
-            $node->domain_site = FALSE;
-            $node->domains = $domains;
-          }
-          node_save($node);
-          db_insert('imported_events')
-            ->fields(array(
-              'nid' => $node->nid,
-              'eid' => (string) $item->eventid,
-            ))
-            ->execute();
-          $i++;
-        }
-      }
+  $importCount = 0;
+  foreach ($xml->arrlist->arr as $item) {
+    $node_exists = db_select('imported_events', 'i')
+      ->fields('i', array('eid'))
+      ->condition('eid', (string) $item->eventid, '=')
+      ->execute()
+      ->fetchField();
 
-      watchdog('kultunaut', 'Was imported @count nodes.', array('@count' => $i));
+    if ($node_exists) {
+      continue;
     }
-    else {
-      watchdog('kultunaut', 'Error while requesting XML feed.');
+
+    $node = new stdClass();
+    $node->uid = 0;
+    $node->type = 'ding_event';
+    $node->language = LANGUAGE_NONE;
+    $node->promote = 1;
+    $node->title = (string) $item->overskrift;
+    $image = _ding_kultunaut_import_fetch_image((string) $item->billede);
+    $image = (array) $image;
+    $node->field_ding_event_title_image[LANGUAGE_NONE][] = $image;
+    $node->field_ding_event_list_image[LANGUAGE_NONE][] = $image;
+    $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
+    $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
+    $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
+    $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
+
+    if (module_exists('domain')) {
+      $domains = variable_get('ding_kultunaut_import_domains', array());
+      $node->domain_site = FALSE;
+      $node->domains = $domains;
     }
+
+    node_save($node);
+
+    db_insert('imported_events')
+      ->fields(array(
+        'nid' => $node->nid,
+        'eid' => (string) $item->eventid,
+      ))
+      ->execute();
+
+    $importCount++;
   }
+
+  watchdog('kultunaut', '@count events were imported.', array('@count' => $importCount));
 }
 
 /**
@@ -260,6 +327,7 @@ function _ding_kultunaut_import_fetch_image($url) {
       array('%directory' => $directory),
       WATCHDOG_ERROR
     );
+
     return FALSE;
   }
 
@@ -267,17 +335,19 @@ function _ding_kultunaut_import_fetch_image($url) {
   $result = drupal_http_request($url);
 
   // Return false if HTTP request failed.
-  if ($result->code != 200) {
+  if ($result->code != 200 || empty($result->data)) {
     watchdog(
       'kultunaut',
-      "Can't download image %image into file",
+      "'Can't download image %image into file",
       array('%image' => $url),
       WATCHDOG_DEBUG
     );
+
     return FALSE;
   }
 
-  $file = file_save_data(file_get_contents($url), $destination, FILE_EXISTS_REPLACE);
+  $file = file_save_data($result->data, $destination, FILE_EXISTS_REPLACE);
+
   return $file;
 }
 

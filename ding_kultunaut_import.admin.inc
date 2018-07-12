@@ -8,10 +8,8 @@
 /**
  * Module system settings form.
  */
-function ding_kultunaut_import_settings_form($form, &$form_state, $deleted_id) {
-  $form = array(
-    '#tree' => TRUE,
-  );
+function ding_kultunaut_import_settings_form($form, &$form_state) {
+  $form['#tree'] = TRUE;
 
   $form['ding_kultunaut_import_url'] = array(
     '#type' => 'textfield',
@@ -20,6 +18,9 @@ function ding_kultunaut_import_settings_form($form, &$form_state, $deleted_id) {
     '#maxlength' => 256,
     '#default_value' => variable_get('ding_kultunaut_import_url', ''),
   );
+
+  // Library mapping.
+  $query = db_select('node', 'n');
 
   if (module_exists('domain')) {
     $options = array();
@@ -47,16 +48,11 @@ function ding_kultunaut_import_settings_form($form, &$form_state, $deleted_id) {
         array()
       ),
     );
+
+    $query->innerJoin('domain_access', 'da', 'n.nid = da.nid');
+    $query->innerJoin('domain', 'd', 'da.gid=d.domain_id');
   }
 
-  $options = array(
-    '' => t('Select library'),
-  );
-
-  // Library mapping.
-  $query = db_select('node', 'n');
-  $query->innerJoin('domain_access', 'da', 'n.nid = da.nid');
-  $query->innerJoin('domain', 'd', 'da.gid=d.domain_id');
   $query->fields('n', array('nid', 'title'));
   $query->condition('n.type', 'ding_library', '=');
   $query->condition('n.status', 1);
