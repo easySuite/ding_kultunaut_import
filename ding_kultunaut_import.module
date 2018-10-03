@@ -137,6 +137,57 @@ function ding_kultunaut_import_cron() {
     $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
     $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
 
+    if (module_exists('culture_frontend')) {
+      $item = [
+        'category_library' =>
+          array(
+            'check' => 1,
+            'amount' => '3',
+          ),
+        'similar' =>
+          array(
+            'check' => 0,
+            'amount' => '3',
+          ),
+        'category' =>
+          array(
+            'check' => 1,
+            'amount' => '3',
+          ),
+        'day' =>
+          array(
+            'check' => 1,
+            'amount' => '3',
+          ),
+        'library' =>
+          array(
+            'check' => 0,
+            'amount' => '3',
+          ),
+        'manually' =>
+          array(
+            'check' => 0,
+            'nids' =>
+              array(
+                'fieldset_multifield_nids' =>
+                  array(
+                    'headline' => '',
+                    'multifield_nids' =>
+                      array(
+                        0 =>
+                          array(
+                            'value' => '',
+                            'weight' => '0',
+                          ),
+                      ),
+                    'culture_frontend_multifield_add_more' => 'Add one more',
+                  ),
+              ),
+          ),
+      ];
+      $node->field_culture_lists_control[LANGUAGE_NONE][0]['wrapper']['lists_options'] = $item;
+    }
+
     if (module_exists('domain')) {
       $domains = variable_get('ding_kultunaut_import_domains', array());
       $node->domain_site = FALSE;
