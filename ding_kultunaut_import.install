@@ -63,3 +63,29 @@ function ding_kultunaut_import_update_7001() {
     'not null' => TRUE,
   ));
 }
+
+/**
+ * Cleanup broken nodes.
+ */
+function ding_kultunaut_import_update_7002() {
+  $nids = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('type', 'ding_event')
+    ->execute()
+    ->fetchAllAssoc('nid');
+
+  $nids = array_reverse($nids, TRUE);
+
+  $to_be_removed = [];
+  foreach ($nids as $key => $nid) {
+    $node = node_load($key);
+
+    if ($node == FALSE) {
+      $to_be_removed[] = $key;
+    }
+  }
+
+  foreach ($to_be_removed as $item) {
+    node_delete($item);
+  }
+}
