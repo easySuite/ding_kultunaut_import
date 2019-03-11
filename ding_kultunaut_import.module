@@ -103,7 +103,7 @@ function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
  * Implements hook_cron().
  */
 function ding_kultunaut_import_cron() {
-  $xml = ding_kultunaut_load_feed(variable_get('ding_kultunaut_import_url'), '');
+  $xml = ding_kultunaut_load_feed(variable_get('ding_kultunaut_import_url', ''));
   if (!$xml) {
     return;
   }
@@ -192,6 +192,15 @@ function ding_kultunaut_import_cron() {
       $domains = variable_get('ding_kultunaut_import_domains', array());
       $node->domain_site = FALSE;
       $node->domains = $domains;
+    }
+
+    if (module_exists('ding_place2book')) {
+      $defaults = variable_get('ding_place2book_event_nodes', array());
+      $node->place2book['maintain_copy'] = !empty($defaults['defaults']['maintain_copy']) ? 1 : 0;
+      $node->place2book['kultunaut_export'] = !empty($defaults['defaults']['kultunaut_export']) ? 1 : 0;
+      $node->place2book['passive'] = !empty($defaults['defaults']['passive']) ? 1 : 0;
+      $node->capacity = isset($defaults['capacity']) ? $defaults['capacity'] : 0;
+      $node->ticket_type = $defaults['ticket_type'];
     }
 
     node_save($node);
