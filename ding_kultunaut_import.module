@@ -23,6 +23,13 @@ function ding_kultunaut_import_menu() {
     'file' => 'ding_kultunaut_import.admin.inc',
   );
 
+  $items['admin/config/ding_event/event_import/cleanup'] = array(
+    'title' => 'Kultunaut events import settings',
+    'page callback' => 'ding_kultunaut_import_cleanup_callback',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
 }
 
@@ -83,7 +90,7 @@ function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
       // Make an unique id for an event clone so it doesn't mess up
       // with original event. Event id and it's time are picked as the
       // unique values for this particular event.
-      $new_event->eventid = $item->eventid . '-' . sha1($item->eventid . $next_time);
+      $new_event->eventid = (string) $item->eventid . '-' . sha1((string) $item->eventid . $next_time);
       $new_event->tid = 'kl. ' . $next_time;
       $additional_events[] = $new_event;
     }
@@ -112,9 +119,10 @@ function ding_kultunaut_import_cron() {
 
   $importCount = 0;
   foreach ($xml->arrlist->arr as $item) {
+    $event_id = (string) $item->eventid;
     $node_exists = db_select('imported_events', 'i')
       ->fields('i', array('eid'))
-      ->condition('eid', (string) $item->eventid, '=')
+      ->condition('eid', $event_id, '=')
       ->execute()
       ->fetchField();
 
@@ -208,7 +216,7 @@ function ding_kultunaut_import_cron() {
     db_insert('imported_events')
       ->fields(array(
         'nid' => $node->nid,
-        'eid' => (string) $item->eventid,
+        'eid' => $event_id,
       ))
       ->execute();
 
@@ -461,4 +469,30 @@ function ding_kultunaut_import_theme($existing, $type, $theme, $path) {
       'render element' => 'form',
     ),
   );
+}
+
+/**
+ * Clean imported events which don't have "eventid" in database.
+ * @return string
+ */
+function ding_kultunaut_import_cleanup_callback() {
+  $nids = db_select('imported_events', 'ie')
+    ->fields('ie', array('nid'))
+    ->condition('eid', '', '=')
+    ->execute()
+    ->fetchAllAssoc('nid');
+
+  $nids = array_reverse($nids, TRUE);
+
+  $i = 0;
+  foreach ($nids as $nid) {
+    node_delete($nid->nid);
+
+    db_delete('imported_events')
+      ->condition('nid', $nid->nid)
+      ->execute();
+    $i++;
+  }
+  $return = "Removed $i nodes";
+  return $return;
 }
