@@ -1,6 +1,6 @@
 name = Ding Import events
 description = Import events from Kultunaut
 core = 7.x
-version = 7.x-4.6.1
+version = 7.x-4.7.0
 package = easyOPAC
 configure = admin/config/ding_event/event_import
