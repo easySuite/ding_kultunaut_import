@@ -144,6 +144,17 @@ function ding_kultunaut_import_cron() {
     $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
     $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
     $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
+    $node->field_ding_event_ticket_link[LANGUAGE_NONE][0]['url'] = (string) $item->billet;
+
+    if (!empty((string) $item->pris)) {
+      $feed_price = (string) $item->pris;
+      preg_match('/\d+/', $feed_price, $price);
+      $price = $price[0];
+
+      if (!empty($price)) {
+        $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
+      }
+    }
 
     if (module_exists('culture_frontend')) {
       $item = [
