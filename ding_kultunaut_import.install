@@ -89,3 +89,44 @@ function ding_kultunaut_import_update_7002() {
     node_delete($item);
   }
 }
+
+/**
+ * Remove imported events without ticket link saved.
+ */
+function ding_kultunaut_import_update_7003() {
+  // Delete broken node which is breaking cron execution.
+  $check_broken_library = db_select('node', 'n')
+    ->fields('n', ['nid'])
+    ->condition('title', 'Andre aktører')
+    ->condition('language', '')
+    ->condition('uid', 0)
+    ->execute()
+    ->fetchColumn();
+
+  if (!empty($check_broken_library)) {
+    node_delete($check_broken_library);
+  }
+
+  // Find all imported events without ticket link.
+  $select = db_select('node', 'n')
+    ->fields('n', ['nid']);
+  $select->join('field_data_field_ding_event_date', 'ded', 'ded.entity_id=n.nid');
+  $select->join('imported_events', 'ie', 'ie.nid=n.nid');
+  $select->join('field_data_field_ding_event_ticket_link', 'tl', 'tl.entity_id=n.nid');
+  $select->condition('n.type', 'ding_event');
+  $select->condition('tl.field_ding_event_ticket_link_url', '');
+  $select->condition('ded.field_ding_event_date_value', date('Y-m-d') . ' 00:00:00', '>=');
+  $exec = $select->execute();
+  $results = $exec->fetchAllAssoc('nid');
+
+  $nodes_for_deletion = [];
+  foreach ($results as $result) {
+    $nodes_for_deletion[] = $result->nid;
+  }
+
+  // Delete found nodes.
+  node_delete_multiple($nodes_for_deletion);
+
+  // Run cron to re-import missing nodes.
+  drupal_cron_run();
+}
