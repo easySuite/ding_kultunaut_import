@@ -383,7 +383,7 @@ function _ding_kultunaut_import_event_date($startdate, $enddate, $time) {
  *   Term ID.
  */
 function _ding_kultunaut_import_taxonomy($term_name, $vocabulary_name) {
-  $arr_terms = taxonomy_get_term_by_name($term_name);
+  $arr_terms = taxonomy_get_term_by_name($term_name, $vocabulary_name);
   $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_name);
   if (!empty($arr_terms)) {
     $tid = key($arr_terms);
