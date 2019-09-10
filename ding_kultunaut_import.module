@@ -24,8 +24,15 @@ function ding_kultunaut_import_menu() {
   );
 
   $items['admin/config/ding_event/event_import/cleanup'] = array(
-    'title' => 'Kultunaut events import settings',
+    'title' => 'Delete broken imported events',
     'page callback' => 'ding_kultunaut_import_cleanup_callback',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/config/ding_event/event_import/delete'] = array(
+    'title' => 'Delete imported events',
+    'page callback' => 'ding_kultunaut_import_event_delete_callback',
     'access arguments' => array('administer site configuration'),
     'type' => MENU_CALLBACK,
   );
@@ -156,11 +163,19 @@ function ding_kultunaut_import_cron() {
     $node->field_ding_event_ticket_link[LANGUAGE_NONE][0]['url'] = (string) $item->billet;
 
     if (!empty((string) $item->pris)) {
+      $a = 1;
       $feed_price = (string) $item->pris;
-      preg_match('/\d+/', $feed_price, $price);
-      $price = $price[0];
+      // Check for numerical value.
+      if (preg_match('/\d+/', $feed_price, $price) === 1) {
+        $price = $price[0];
+      }
 
-      if (!empty($price)) {
+      // Check if event is "free".
+      if (preg_match('/gratis/i', $feed_price) === 1) {
+        $price = '0';
+      }
+
+      if (isset($price)) {
         $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
       }
     }
@@ -523,5 +538,30 @@ function ding_kultunaut_import_cleanup_callback() {
     $i++;
   }
   $return = "Removed $i nodes";
+  return $return;
+}
+
+/**
+ * Delete all imported nodes.
+ */
+function ding_kultunaut_import_event_delete_callback() {
+  $nids = db_select('imported_events', 'ie')
+    ->fields('ie', array('nid'))
+    ->execute()
+    ->fetchAllAssoc('nid');
+
+  $nids = array_keys($nids);
+
+  $i = 0;
+  foreach ($nids as $nid) {
+    node_delete($nid);
+
+    db_delete('imported_events')
+      ->condition('nid', $nid)
+      ->execute();
+    $i++;
+  }
+
+  $return = "Deleted $i nodes.";
   return $return;
 }
