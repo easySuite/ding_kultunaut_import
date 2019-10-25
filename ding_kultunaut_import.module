@@ -24,8 +24,15 @@ function ding_kultunaut_import_menu() {
   );
 
   $items['admin/config/ding_event/event_import/cleanup'] = array(
-    'title' => 'Kultunaut events import settings',
+    'title' => 'Delete broken imported events',
     'page callback' => 'ding_kultunaut_import_cleanup_callback',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/config/ding_event/event_import/delete'] = array(
+    'title' => 'Delete imported events',
+    'page callback' => 'ding_kultunaut_import_event_delete_callback',
     'access arguments' => array('administer site configuration'),
     'type' => MENU_CALLBACK,
   );
@@ -108,6 +115,8 @@ function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
 
 /**
  * Implements hook_cron().
+ *
+ * @throws \Exception
  */
 function ding_kultunaut_import_cron() {
   $xml = ding_kultunaut_load_feed(variable_get('ding_kultunaut_import_url', ''));
@@ -141,17 +150,32 @@ function ding_kultunaut_import_cron() {
     $node->field_ding_event_title_image[LANGUAGE_NONE][] = $image;
     $node->field_ding_event_list_image[LANGUAGE_NONE][] = $image;
     $node->field_ding_event_lead[LANGUAGE_NONE]['0']['value'] = (string) $item->beskrivelse;
-    $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_category((string) $item->kategori);
+    if (!empty($item->langbeskriv)) {
+      $node->field_ding_event_body[LANGUAGE_NONE]['0'] = array(
+        'value' => (string) $item->langbeskriv,
+        'format' => EVENT_CATEGORY_FORMAT,
+      );
+    }
+    $node->field_ding_event_category[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_taxonomy((string) $item->kategori, 'event_category');
+    $node->field_ding_event_target[LANGUAGE_NONE]['0']['tid'] = _ding_kultunaut_import_taxonomy((string) $item->maalgruppe, 'event_target');
     $node->field_ding_event_date[LANGUAGE_NONE][] = _ding_kultunaut_import_event_date($item->startdato, $item->slutdato, $item->tid);
     $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = _ding_kultunaut_import_assign_library((string) $item->sted);
     $node->field_ding_event_ticket_link[LANGUAGE_NONE][0]['url'] = (string) $item->billet;
 
     if (!empty((string) $item->pris)) {
+      $a = 1;
       $feed_price = (string) $item->pris;
-      preg_match('/\d+/', $feed_price, $price);
-      $price = $price[0];
+      // Check for numerical value.
+      if (preg_match('/\d+/', $feed_price, $price) === 1) {
+        $price = $price[0];
+      }
 
-      if (!empty($price)) {
+      // Check if event is "free".
+      if (preg_match('/gratis/i', $feed_price) === 1) {
+        $price = '0';
+      }
+
+      if (isset($price)) {
         $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
       }
     }
@@ -243,6 +267,11 @@ function ding_kultunaut_import_cron() {
  * @param string $item
  *   String form <sted> field of feed. This string contain venue name where the
  *   event will take place.
+ *
+ * @return int
+ *   Node ID of library node.
+ *
+ * @throws \Exception
  */
 function _ding_kultunaut_import_assign_library($item) {
   // Preparing <sted> string.
@@ -362,13 +391,15 @@ function _ding_kultunaut_import_event_date($startdate, $enddate, $time) {
  *
  * @param string $term_name
  *   Category term name.
+ * @param string $vocabulary_name
+ *   Vocabulary name.
  *
  * @return int
  *   Term ID.
  */
-function _ding_kultunaut_import_category($term_name) {
-  $arr_terms = taxonomy_get_term_by_name($term_name);
-  $vocabulary = taxonomy_vocabulary_machine_name_load('event_category');
+function _ding_kultunaut_import_taxonomy($term_name, $vocabulary_name) {
+  $arr_terms = taxonomy_get_term_by_name($term_name, $vocabulary_name);
+  $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_name);
   if (!empty($arr_terms)) {
     $tid = key($arr_terms);
   }
@@ -441,6 +472,8 @@ function ding_kultunaut_import_node_delete($node) {
 
 /**
  * Theme function for fields settings form.
+ *
+ * @throws \Exception
  */
 function theme_ding_kultunaut_import_mapping_table(&$variables) {
   $rows = array();
@@ -505,5 +538,30 @@ function ding_kultunaut_import_cleanup_callback() {
     $i++;
   }
   $return = "Removed $i nodes";
+  return $return;
+}
+
+/**
+ * Delete all imported nodes.
+ */
+function ding_kultunaut_import_event_delete_callback() {
+  $nids = db_select('imported_events', 'ie')
+    ->fields('ie', array('nid'))
+    ->execute()
+    ->fetchAllAssoc('nid');
+
+  $nids = array_keys($nids);
+
+  $i = 0;
+  foreach ($nids as $nid) {
+    node_delete($nid);
+
+    db_delete('imported_events')
+      ->condition('nid', $nid)
+      ->execute();
+    $i++;
+  }
+
+  $return = "Deleted $i nodes.";
   return $return;
 }
