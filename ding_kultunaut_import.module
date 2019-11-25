@@ -114,6 +114,48 @@ function ding_kultunaut_import_expand_events(SimpleXMLElement $xml) {
 }
 
 /**
+ * Check if "on-site" event wasn't deleted from feed.
+ *
+ * @param \SimpleXMLElement $xml
+ *   Parsed event feed xml object.
+ *
+ * @throws \Exception
+ */
+function ding_kultunaut_import_check_diff_db_feed(SimpleXMLElement $xml) {
+  $feed_ids_array = [];
+  foreach ($xml->arrlist->arr as $item) {
+    $feed_ids_array[] = (string) $item->eventid;
+  }
+
+  $feed_ids_db = db_select('imported_events', 'i')
+    ->fields('i', array('eid'))
+    ->execute()
+    ->fetchCol();
+
+  $data_diff = drupal_array_diff_assoc_recursive($feed_ids_db, $feed_ids_array);
+  foreach ($data_diff as $event_id) {
+    $nid = db_select('imported_events', 'i')
+      ->fields('i', ['nid'])
+      ->condition('eid', $event_id, '=')
+      ->execute()
+      ->fetchField();
+
+    $node = node_load($nid);
+    $event_date_data = field_get_items('node', $node, 'field_ding_event_date');
+
+    $date = new DateTime();
+    $event_date_object = $date::createFromFormat('Y-m-d H:i:s', $event_date_data[0]['value']);
+    $event_date_timestamp = $event_date_object->getTimestamp();
+
+    $now = new DateTime();
+    $current_timestamp = $now->getTimestamp();
+    if ($event_date_timestamp > $current_timestamp) {
+      node_delete($nid);
+    }
+  }
+}
+
+/**
  * Implements hook_cron().
  *
  * @throws \Exception
@@ -125,6 +167,7 @@ function ding_kultunaut_import_cron() {
   }
 
   ding_kultunaut_import_expand_events($xml);
+  ding_kultunaut_import_check_diff_db_feed($xml);
 
   $importCount = 0;
   foreach ($xml->arrlist->arr as $item) {
