@@ -210,8 +210,21 @@ function ding_kultunaut_import_cron() {
       $feed_price = (string) $item->pris;
       // Check for numerical value.
       $matches = [];
-      if (preg_match('/\d+/', $feed_price, $matches) === 1) {
-        $price = $matches[0];
+
+      preg_match_all('/Entré|\d+/', $feed_price, $matches);
+      $matches = reset($matches);
+
+      if (count($matches) > 1) {
+        // Long phrase with price somewhere in it.
+        $price = $matches[1];
+      }
+      else if ($matches[0] == 'Entré') {
+        // The price is received as "Entré", then save it as "-1" in db.
+        $price = '-1';
+      }
+      else if (is_numeric($feed_price)) {
+        // Given clear price.
+        $price = $feed_price;
       }
 
       $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
