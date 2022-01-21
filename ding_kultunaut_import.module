@@ -218,11 +218,11 @@ function ding_kultunaut_import_cron() {
         // Long phrase with price somewhere in it.
         $price = $matches[1];
       }
-      else if ($matches[0] == 'Entré') {
+      elseif ($matches[0] == 'Entré') {
         // The price is received as "Entré", then save it as "-1" in db.
         $price = '-1';
       }
-      else if (is_numeric($feed_price)) {
+      elseif (is_numeric($feed_price)) {
         // Given clear price.
         $price = $feed_price;
       }
