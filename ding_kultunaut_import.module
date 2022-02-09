@@ -206,21 +206,28 @@ function ding_kultunaut_import_cron() {
     $node->field_ding_event_ticket_link[LANGUAGE_NONE][0]['url'] = (string) $item->billet;
 
     if (!empty((string) $item->pris)) {
-      $a = 1;
+      $price = '0';
       $feed_price = (string) $item->pris;
       // Check for numerical value.
-      if (preg_match('/\d+/', $feed_price, $price) === 1) {
-        $price = $price[0];
+      $matches = [];
+
+      preg_match_all('/Entré|\d+/', $feed_price, $matches);
+      $matches = reset($matches);
+
+      if (count($matches) > 1) {
+        // Long phrase with price somewhere in it.
+        $price = $matches[1];
+      }
+      elseif ($matches[0] == 'Entré') {
+        // The price is received as "Entré", then save it as "-1" in db.
+        $price = '-1';
+      }
+      elseif (is_numeric($feed_price)) {
+        // Given clear price.
+        $price = $feed_price;
       }
 
-      // Check if event is "free".
-      if (preg_match('/gratis/i', $feed_price) === 1) {
-        $price = '0';
-      }
-
-      if (isset($price)) {
-        $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
-      }
+      $node->field_ding_event_price[LANGUAGE_NONE][0]['value'] = $price;
     }
 
     if (module_exists('culture_frontend')) {
