@@ -162,9 +162,11 @@ function ding_kultunaut_import_check_diff_db_feed(SimpleXMLElement $xml) {
     }
   }
 
-  db_delete('imported_events')
-    ->condition('nid', $cleanup_node_ids, 'IN')
-    ->execute();
+  if (!empty($cleanup_node_ids)) {
+    db_delete('imported_events')
+      ->condition('nid', $cleanup_node_ids, 'IN')
+      ->execute();
+  }
 }
 
 /**
