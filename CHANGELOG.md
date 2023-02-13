@@ -1,5 +1,8 @@
 ## Change Log
 
+### 7.x-6.6.0 (13/02-2023)
+- [#16](https://github.com/easySuite/ding_kultunaut_import/pull/16) EASYOPAC-1447 - Cleanup stale node ids. (@OIOIOOOI)
+
 ### 7.x-6.4.1 (09/02-2022)
 - [#14](https://github.com/easySuite/ding_kultunaut_import/pull/14) EASYOPAC-1389 - Prices of events imported from Kultunaut. (@OIOIOOOI, @bozeak)
 - [#13](https://github.com/easySuite/ding_kultunaut_import/pull/13) EASYOPAC-1386 - Fix for new price parse. (@OIOIOOOI)
@@ -25,11 +28,11 @@
 - [#5](https://github.com/easySuite/ding_kultunaut_import/pull/5) EASYOPAC-825 - Expand events with repeated time. (@OIOIOOOI)
 
 ### 7.x-4.0.2 (23/01-2018)
-- [#4](https://github.com/easySuite/ding_kultunaut_import/pull/4) EASYOPAC-594 - Don't create 'Other' librariy if no need. (@bozeak)
+- [#4](https://github.com/easySuite/ding_kultunaut_import/pull/4) EASYOPAC-594 - Don't create 'Other' librariy if no need. (@easySuite)
 
 ### 7.x-3.1.0 (11/08-2017)
-- [#3](https://github.com/easySuite/ding_kultunaut_import/pull/3) EASYOPAC-558 - Custom mapping for imported events. (@bozeak)
+- [#3](https://github.com/easySuite/ding_kultunaut_import/pull/3) EASYOPAC-558 - Custom mapping for imported events. (@easySuite)
 
 ### 7.x-3.0.2 (27/04-2017)
 - [#2](https://github.com/easySuite/ding_kultunaut_import/pull/2) EASYOPAC-400 - Update module description. (@easySuite)
-- [#1](https://github.com/easySuite/ding_kultunaut_import/pull/1) EASYOPAC-413 - Extend Kultunaut import with Domain module. (@bozeak)
+- [#1](https://github.com/easySuite/ding_kultunaut_import/pull/1) EASYOPAC-413 - Extend Kultunaut import with Domain module. (@easySuite)
