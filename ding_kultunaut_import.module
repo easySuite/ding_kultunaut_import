@@ -133,6 +133,7 @@ function ding_kultunaut_import_check_diff_db_feed(SimpleXMLElement $xml) {
     ->fetchCol();
 
   $data_diff = drupal_array_diff_assoc_recursive($feed_ids_db, $feed_ids_array);
+  $cleanup_node_ids = [];
   foreach ($data_diff as $event_id) {
     $nid = db_select('imported_events', 'i')
       ->fields('i', ['nid'])
@@ -141,6 +142,13 @@ function ding_kultunaut_import_check_diff_db_feed(SimpleXMLElement $xml) {
       ->fetchField();
 
     $node = node_load($nid);
+    // For various reasons, the node might be gone.
+    // Cleanup in that case.
+    if (empty($node)) {
+      $cleanup_node_ids[] = $nid;
+      continue;
+    }
+
     $event_date_data = field_get_items('node', $node, 'field_ding_event_date');
 
     $date = new DateTime();
@@ -152,6 +160,12 @@ function ding_kultunaut_import_check_diff_db_feed(SimpleXMLElement $xml) {
     if ($event_date_timestamp > $current_timestamp) {
       node_delete($nid);
     }
+  }
+
+  if (!empty($cleanup_node_ids)) {
+    db_delete('imported_events')
+      ->condition('nid', $cleanup_node_ids, 'IN')
+      ->execute();
   }
 }
 
